@@ -1,0 +1,87 @@
+#!/usr/bin/perl -w
+#
+# Convert FLAC into MP3
+
+use strict;
+
+
+### SETUP ###
+my $metaflac = "/usr/bin/metaflac";
+my $flac = "/usr/bin/flac";
+my $lame = "/usr/local/bin/lame";
+
+
+### VARIABLES ###
+my $cover = "/tmp/flac2mp3-cover.tmp";
+my ($in, $out, $cmd, $erg, $l, $tg, %tag, $hascover);
+
+
+### PROGRAM ###
+if ($#ARGV != 0) {
+	print ("\nusage: flac2mp3 <filename>\n\n");
+	exit (1);
+}
+
+$in = $ARGV[0];
+if (! -r $in) {
+	print ("\n$in not found!\n\n");
+	exit (1);
+}
+
+if ($in !~ /^(.+)\.flac$/i) {
+	print ("\n$in: no .flac?!\n\n");
+	exit (1);
+}
+$out = "$1.mp3";
+
+
+# Set Charset
+$ENV{"LC_CTYPE"} = "en_US.UTF-8";
+
+
+# Get meta infos
+$cmd = "$metaflac --export-tags-to=- \"$in\"";
+$erg = `$cmd`;
+foreach $l (split(/\n/, $erg)) {
+	if ($l =~ /^(.+)=(.+)$/) {
+		$tg = lc($1);
+		$tag{$tg} = $2;
+	}
+}
+
+# Extract image
+$hascover = 0;
+if (-r $cover) {
+	unlink ($cover);
+}
+$cmd = "$metaflac --list --block-type=PICTURE \"$in\"";
+$erg = `$cmd`;
+if ($erg =~ /type[^\n]+cover/im) {
+	$cmd = "$metaflac --export-picture-to=$cover \"$in\"";
+	$erg = `$cmd`;
+	if (! -s $cover) {
+		print ("Could not extract cover image!\n");
+	} else {
+		$hascover = 1;
+	}
+}
+
+# Convert
+$cmd = "$flac -cds \"$in\" | $lame --quiet --preset standard --ignore-tag-errors --add-id3v2";
+if (exists($tag{"artist"}))		{ $cmd .= " --ta \"" . $tag{"artist"} . "\""; }
+if (exists($tag{"title"}))		{ $cmd .= " --tt \"" . $tag{"title"} . "\""; }
+if (exists($tag{"album"}))		{ $cmd .= " --tl \"" . $tag{"album"} . "\""; }
+if (exists($tag{"date"}))		{ $cmd .= " --ty \"" . $tag{"date"} . "\""; }
+if (exists($tag{"genre"}))		{ $cmd .= " --tg \"" . $tag{"genre"} . "\""; }
+if (exists($tag{"tracknumber"}))	{ $cmd .= " --tn \"" . $tag{"tracknumber"} . "\""; }
+if (exists($tag{"discnumber"}))		{ $cmd .= " --tv \"TPOS=" . $tag{"discnumber"} . "\""; }
+if (exists($tag{"compilation"}))	{ $cmd .= " --tv \"TCMP=" . $tag{"compilation"} . "\""; }
+if ($hascover)				{ $cmd .= " --ti $cover"; }
+$cmd .= " - \"$out\"";
+
+system ($cmd);
+
+if (-r $cover) {
+	unlink ($cover);
+}
+

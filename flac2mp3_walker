@@ -1,0 +1,63 @@
+#!/usr/bin/perl -w
+#
+# Mirror FLAC directory into MP3 dir
+
+use strict;
+
+
+### SETUP ###
+my $dflac = "/opt/share/Multimedia/Audio/FLAC";
+my $dmp3  = "/opt/share/Multimedia/Audio/FLAC2MP3";
+
+my $flac2mp3 = "/usr/local/sbin/flac2mp3";
+my $find = "/usr/bin/find";
+my $dirname = "/usr/bin/dirname";
+my $mkdir = "/usr/bin/mkdir";
+my $mv = "/usr/bin/mv";
+
+
+### VARIABLES ###
+my ($cmd, $erg, $file, $mp3a, $mp3b);
+
+
+### PROGRAM ###
+# Run command
+sub doit {
+	my $t = shift;
+
+	system ($t);
+}
+
+
+# Get files
+umask (000);
+$cmd = "$find $dflac -type f";
+$erg = `$cmd`;
+
+# Walk through files
+foreach $file (split(/\n/, $erg)) {
+
+	if ($file =~ /^(.+)\.flac/i) {
+		$mp3a = "$1.mp3";
+		$mp3b = $mp3a;
+		$mp3b =~ s|$dflac|$dmp3|;
+		if (! -f $mp3b) {
+			# Test destination dir
+			$cmd = "$dirname \"$mp3b\"";
+			$erg = `$cmd`;
+			chop ($erg);
+			if (! -d $erg) {
+				$cmd = "$mkdir -p \"$erg\"";
+				doit ($cmd);
+			}
+			# Convert
+			$cmd = "$flac2mp3 \"$file\"";
+			doit ($cmd);
+			# Move it
+			$cmd = "$mv \"$mp3a\" \"$mp3b\"";
+			doit ($cmd);
+		}
+	}
+
+}
+
